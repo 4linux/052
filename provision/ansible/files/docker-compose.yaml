@@ -1,0 +1,8 @@
+version: '3'
+services:
+  coffee-shop:
+    image: sgoncalvestech/coffee-shop
+    container_name: loja_de_cafe
+    ports:
+      - 8080:3000
+    restart: always

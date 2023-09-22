@@ -1,0 +1,141 @@
+---
+- hosts: all
+  become: yes
+  become_user: root
+  become_method: sudo
+  tasks:
+
+    - name: Garantindo /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ item }}"
+      with_items:
+        - 172.16.1.110 server-zbx
+        - 172.16.1.111 app
+     
+    - name: Instala pacotes que permitem que o apt seja usado sobre HTTPS
+      apt:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - gnupg-agent
+        - software-properties-common
+        - default-mysql-client
+        - nfs-common
+        - snapd
+        - git
+        - vim
+
+    - name: Baixa o pacote de instalação do Zabbix
+      get_url:
+        url: https://repo.zabbix.com/zabbix/6.0/debian/pool/main/z/zabbix-release/zabbix-release_6.0-4+debian11_all.deb
+        dest: /tmp/zabbix-release_6.0-4+debian11_all.deb
+        mode: '0440'
+
+    - name: Instalando o pacote Zabbix
+      apt:
+        deb: /tmp/zabbix-release_6.0-4+debian11_all.deb
+
+    - name: Atualizando o repositório
+      apt: 
+        update_cache: yes
+    
+    - name: Instalado o Zabbix Agent2
+      apt:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+        - zabbix-agent2
+        - zabbix-agent2-plugin-*
+
+    - name: Iniciando e Habilitando Zabbix Agent2
+      service:
+        name: zabbix-agent2 
+        state: started
+        enabled: yes
+
+    - name: Adiciona o usuario zabbix no grupo docker
+      user:
+        name: zabbix
+        group: docker
+
+    - name: Copiar o arquivo de configuração do Zabbix Agent2
+      template:
+        src: files/zabbix_agentd.conf.j2 
+        dest: /etc/zabbix/zabbix_agent2.conf       
+      notify:
+        - Reiniciar Zabbix Agent
+
+    - name: Adiciona uma chave de assinatura apt para o Docker
+      apt_key:
+        url: https://download.docker.com/linux/debian/gpg
+        state: present
+
+    - name: Adiciona repositorio apt para versao estavel
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/debian bullseye stable
+        state: present
+
+    - name: Instala o Docker e suas dependencias
+      apt:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+        - docker-compose-plugin
+      notify:
+        - docker status
+
+    - name: Adiciona o usuario vagrant no grupo docker
+      user:
+        name: vagrant
+        group: docker
+
+    - name: Cria o diretorio docker.service.d
+      file:
+        path: /etc/systemd/system/docker.service.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+        
+    - name: Reinicia o Docker
+      service:
+        name: docker
+        daemon_reload: yes
+        state: restarted
+
+    - name: Remove swap do arquivo /etc/fstab
+      mount:
+        name: "{{ item }}"
+        fstype: swap
+        state: absent
+      with_items:
+        - swap
+        - none
+
+    - name: Desativa o swap
+      command: swapoff -a
+      when: ansible_swaptotal_mb > 0
+
+    - name: Executando o compose
+      shell: docker compose -f /vagrant/provision/ansible/files/docker-compose.yaml up -d
+
+  handlers:
+    - name: docker status
+      service: name=docker state=started
+    - name: Reiniciar Zabbix Agent
+      service:
+        name: zabbix-agent2
+        state: restarted

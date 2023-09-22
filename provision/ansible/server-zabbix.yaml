@@ -1,0 +1,201 @@
+---
+- hosts: all
+  become: yes
+  become_user: root
+  become_method: sudo
+  tasks:
+    - name: Garantindo /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ item }}"
+      with_items:
+        - 172.16.1.110 server-zbx
+        - 172.16.1.111 app
+     
+    - name: Instala pacotes que permitem que o apt seja usado sobre HTTPS
+      apt:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - gnupg-agent
+        - software-properties-common
+        - nfs-common
+        - git
+        - vim
+        
+    - name: Instalando mariaDB e dependências
+      package:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+          - mariadb-server
+          - mariadb-client 
+          - python3-mysqldb
+          - default-libmysqlclient-dev
+
+    - name: Iniciando e Habilitando MySQL
+      service:
+        name: mysql
+        state: started
+        enabled: yes
+
+    - name: Criando Zabbix Database
+      mysql_db:
+        name: zabbix
+        collation: utf8mb4_bin
+        encoding: utf8mb4
+        state: present
+      ignore_errors: yes
+
+    - name: Criando usuário zabbix no mysql
+      mysql_user:
+        name: zabbix
+        password: '4linux'
+        priv: 'zabbix.*:ALL'
+        host: 'localhost'
+        state: present
+
+    - name: Conceder privilégios ao usuário Zabbix
+      mysql_user:
+        name: zabbix
+        priv: 'zabbix.*:ALL'
+        host: localhost
+
+    - name: Habilitar log_bin_trust_function_creators
+      mysql_variables:
+        variable: log_bin_trust_function_creators
+        value: "1"
+        mode: global
+      notify:
+          - Restart mysql
+
+    - name: Baixa o pacote de instalação do Zabbix Server
+      get_url:
+        url: https://repo.zabbix.com/zabbix/6.0/debian/pool/main/z/zabbix-release/zabbix-release_6.0-4+debian11_all.deb
+        dest: /tmp/zabbix-release_6.0-4+debian11_all.deb
+        mode: '0440'
+
+    - name: Instalando o pacote Zabbix
+      apt:
+        deb: /tmp/zabbix-release_6.0-4+debian11_all.deb
+
+    - name: Atualizando o repositório
+      apt: 
+        update_cache: yes
+
+    - name: Instalado o Zabbix Server, FrontEnd e Zabbix Agent
+      apt:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+        - zabbix-server-mysql
+        - zabbix-frontend-php
+        - zabbix-apache-conf
+        - zabbix-sql-scripts
+        - zabbix-agent
+
+    - name: Importanto o esquema inicial do zabbix para o MySQL
+      shell: zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | mysql --default-character-set=utf8mb4 -uzabbix -p4linux zabbix
+      ignore_errors: yes
+
+    - name: Desabilitando log_bin_trust_function_creators
+      mysql_variables:
+        variable: log_bin_trust_function_creators
+        value: "0"
+        mode: global
+      notify:
+          - Restart mysql
+
+    - name: Configurando senha do BD zabbix no arquivo de configuração
+      lineinfile:
+         path: /etc/zabbix/zabbix_server.conf
+         regexp: '^DBPassword'
+         line: 'DBPassword=4linux'
+         backup: yes
+
+    - name: Iniciando e Habilitando Zabbix Server e Zabbix Agent
+      service:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - zabbix-server 
+        - zabbix-agent 
+        - apache2
+
+    - name: Remove swap do arquivo /etc/fstab
+      mount:
+        name: "{{ item }}"
+        fstype: swap
+        state: absent
+      with_items:
+        - swap
+        - none
+
+    - name: Configurando locales para pt_BR.UTF-8
+      locale_gen:
+        name: pt_BR.UTF-8
+        state: present 
+
+    - name: Atualizando as configurações de locale.
+      command: dpkg-reconfigure --frontend=noninteractive locales
+      notify:
+        - Restart Apache2
+
+    - name: Criando usuário zbx_monitor no mysql
+      mysql_user:
+        name: zbx_monitor
+        password: '4linux'
+        priv: 'zbx_monitor.*:ALL'
+        host: 'localhost'
+        state: present
+
+    - name: Conceder privilégios ao usuário zbx_monitor
+      mysql_user:
+        name: zbx_monitor
+        priv: '*.*:REPLICATION CLIENT,PROCESS,SHOW DATABASES,SHOW VIEW'
+        host: 'localhost'
+
+    - name: copiando mysql_parameter para pasta zabbix
+      copy: 
+        src: files/template_db_mysql.conf
+        dest: /etc/zabbix/zabbix_agentd.d/
+        owner: zabbix
+        group: zabbix
+        mode: '0644'
+
+    - name: Cria o diretório home zabbix
+      file:
+        path: /var/lib/zabbix/
+        state: directory
+        owner: zabbix
+        group: zabbix
+        mode: '0755'
+
+    - name: copiando my.cnf para pasta home do zabbix
+      copy: 
+        src: files/.my.cnf
+        dest: /var/lib/zabbix/
+        owner: zabbix
+        group: zabbix
+        mode: '0644'
+
+  handlers:
+    - name: Restart mysql
+      service:
+        name: mysql
+        state: restarted
+
+    - name: Restart Apache2
+      service:
+        name: apache2
+        state: restarted

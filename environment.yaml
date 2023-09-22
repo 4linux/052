@@ -1,0 +1,17 @@
+---
+- name: server-zabbix
+  box: debian/bullseye64
+  hostname: server-zbx
+  ipaddress: 172.16.1.110
+  memory: 3584
+  cpus: 2
+  provision: provision/ansible/server-zabbix.yaml
+
+- name: app
+  box: debian/bullseye64
+  hostname: app
+  ipaddress: 172.16.1.111
+  memory: 1536
+  cpus: 2
+  provision: provision/ansible/app.yaml
+
