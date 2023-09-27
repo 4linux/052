@@ -132,6 +132,11 @@
     - name: Executando o compose
       shell: docker compose -f /vagrant/provision/ansible/files/docker-compose.yaml up -d
 
+    - name: Copiar o arquivo compose do statping para diretório home do vagrant
+      template:
+        src: files/statping-docker-compose.yaml
+        dest: /home/vagrant/docker-compose.yaml 
+
   handlers:
     - name: docker status
       service: name=docker state=started
