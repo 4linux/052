@@ -61,11 +61,6 @@
         state: started
         enabled: yes
 
-    - name: Adiciona o usuario zabbix no grupo docker
-      user:
-        name: zabbix
-        group: docker
-
     - name: Copiar o arquivo de configuração do Zabbix Agent2
       template:
         src: files/zabbix_agentd.conf.j2 
@@ -97,10 +92,13 @@
       notify:
         - docker status
 
-    - name: Adiciona o usuario vagrant no grupo docker
+    - name: Adiciona os usuários ao grupo docker
       user:
-        name: vagrant
+        name: "{{ item }}"
         group: docker
+      loop:
+        - vagrant
+        - zabbix
 
     - name: Cria o diretorio docker.service.d
       file:
@@ -131,11 +129,6 @@
 
     - name: Executando o compose
       shell: docker compose -f /vagrant/provision/ansible/files/docker-compose.yaml up -d
-
-    - name: Copiar o arquivo compose do statping para diretório home do vagrant
-      template:
-        src: files/statping-docker-compose.yaml
-        dest: /home/vagrant/docker-compose.yaml 
 
   handlers:
     - name: docker status
