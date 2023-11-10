@@ -107,6 +107,14 @@
         owner: root
         group: root
         mode: '0755'
+
+    - name: copiando compose statping para pasta home
+      copy: 
+        src: files/statping-docker-compose.yaml
+        dest: /home/vagrant/docker-compose.yaml
+        owner: vagrant
+        group: vagrant
+        mode: '0644'
         
     - name: Reinicia o Docker
       service:
