@@ -145,3 +145,6 @@
       service:
         name: zabbix-agent2
         state: restarted
+    - name: Atualizar o cache do apt
+      apt:
+        update_cache: yes
