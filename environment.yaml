@@ -11,7 +11,7 @@
   box: debian/bullseye64
   hostname: app
   ipaddress: 172.16.1.111
-  memory: 1536
+  memory: 2048
   cpus: 2
   provision: provision/ansible/app.yaml
 
