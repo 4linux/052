@@ -110,7 +110,7 @@
 
     - name: copiando compose statping para pasta home
       copy: 
-        src: files/statping-docker-compose.yaml
+        src: files/docker-compose.yaml
         dest: /home/vagrant/docker-compose.yaml
         owner: vagrant
         group: vagrant
@@ -136,7 +136,7 @@
       when: ansible_swaptotal_mb > 0
 
     - name: Executando o compose
-      shell: docker compose -f /vagrant/provision/ansible/files/docker-compose.yaml up -d
+      shell: docker compose -f /home/vagrant/docker-compose.yaml up -d
 
   handlers:
     - name: docker status
