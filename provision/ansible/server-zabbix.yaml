@@ -141,15 +141,27 @@
         - swap
         - none
 
-    - name: Configurando locales para pt_BR.UTF-8
-      locale_gen:
-        name: pt_BR.UTF-8
-        state: present 
+    - name: Instala pacote de locales
+      apt:
+        name: locales
+        state: present
+        update_cache: yes
 
-    - name: Atualizando as configurações de locale.
-      command: dpkg-reconfigure --frontend=noninteractive locales
+    - name: Configurando locales necessários para o Zabbix
+      locale_gen:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - en_US.UTF-8
+        - pt_BR.UTF-8
       notify:
         - Restart Apache2
+
+    - name: Define locale padrão do sistema
+      command: update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+      changed_when: false
+      notify:
+        - Restart Apache2          
 
     - name: Criando usuário zbx_monitor no mysql
       mysql_user:
