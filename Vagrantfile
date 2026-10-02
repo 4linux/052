@@ -29,6 +29,9 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         vb.memory = env['memory']
         vb.cpus   = env['cpus']
       end
+      # Atualiza o cache do apt antes do ansible_local instalar o Ansible
+      # (o cache do box fica desatualizado e gera 404 nos repositorios)
+      srv.vm.provision 'shell', inline: 'apt-get update -qq'
       srv.vm.provision 'ansible_local' do |ansible|
         ansible.playbook           = env['provision']
         ansible.install_mode       = 'pip3'
